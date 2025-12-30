@@ -1,7 +1,7 @@
 /// Configuration management for the Flutter app.
 /// 
 /// Environment-specific backend URLs and settings.
-/// Update [Config.baseUrl] for your backend location.
+/// Pass API_BASE_URL via --dart-define for your backend location.
 
 class Config {
   /// Backend API base URL
@@ -11,16 +11,13 @@ class Config {
   /// - iOS simulator: http://localhost:8000
   /// - Web: http://localhost:8000
   /// - Physical device: http://<your-machine-ip>:8000
-  static const String baseUrl = String.fromEnvironment(
-    'BASE_URL',
-    defaultValue: 'http://localhost:8000',
+  static const String _apiBaseUrl = String.fromEnvironment(
+    'API_BASE_URL',
+    defaultValue: 'http://localhost:8000/api/v1',
   );
 
-  /// API endpoint path prefix
-  static const String apiPrefix = '/api/v1';
-
-  /// Full API URL
-  static String get apiUrl => '$baseUrl$apiPrefix';
+  /// Full API URL (already includes /api/v1 prefix)
+  static String get apiUrl => _apiBaseUrl;
 
   /// App name
   static const String appName = 'Położne – Midwife Tools';

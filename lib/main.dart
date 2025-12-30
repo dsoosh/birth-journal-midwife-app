@@ -13,10 +13,15 @@ import 'services/auth_provider.dart';
 import 'services/cases_provider.dart';
 import 'services/events_provider.dart';
 import 'services/secure_storage_service.dart';
+import 'services/notification_service.dart';
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  final apiClient = ApiClient(baseUrl: Config.baseUrl);
+  
+  // Initialize notification service
+  await NotificationService().initialize();
+  
+  final apiClient = ApiClient(baseUrl: Config.apiUrl);
   final storage = SecureStorageService();
   runApp(App(apiClient: apiClient, storageService: storage));
 }

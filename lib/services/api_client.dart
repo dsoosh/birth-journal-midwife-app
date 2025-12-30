@@ -54,7 +54,7 @@ class ApiClient {
 
   Future<AuthResponse> login(String email, String password) async {
     final response = await http.post(
-      Uri.parse('$baseUrl/api/v1/auth/login'),
+      Uri.parse('$baseUrl/auth/login'),
       headers: _headers,
       body: jsonEncode({
         'email': email,
@@ -83,7 +83,7 @@ class ApiClient {
     };
 
     final response = await http.get(
-      Uri.parse('$baseUrl/api/v1/cases').replace(queryParameters: queryParams),
+      Uri.parse('$baseUrl/cases').replace(queryParameters: queryParams),
       headers: _headers,
     );
 
@@ -104,7 +104,7 @@ class ApiClient {
 
   Future<CreateCaseResponse> createCase() async {
     final response = await http.post(
-      Uri.parse('$baseUrl/api/v1/cases'),
+      Uri.parse('$baseUrl/cases'),
       headers: _headers,
       body: jsonEncode({}),
     );
@@ -118,7 +118,7 @@ class ApiClient {
 
   Future<String> claimCase(String joinCode) async {
     final response = await http.post(
-      Uri.parse('$baseUrl/api/v1/cases/claim'),
+      Uri.parse('$baseUrl/cases/claim'),
       headers: _headers,
       body: jsonEncode({'join_code': joinCode}),
     );
@@ -133,7 +133,7 @@ class ApiClient {
 
   Future<void> closeCase(String caseId) async {
     final response = await http.post(
-      Uri.parse('$baseUrl/api/v1/cases/$caseId/close'),
+      Uri.parse('$baseUrl/cases/$caseId/close'),
       headers: _headers,
       body: jsonEncode({}),
     );
@@ -154,7 +154,7 @@ class ApiClient {
     };
 
     final response = await http.get(
-      Uri.parse('$baseUrl/api/v1/cases/$caseId/events')
+      Uri.parse('$baseUrl/cases/$caseId/events')
           .replace(queryParameters: queryParams),
       headers: _headers,
     );
@@ -182,7 +182,7 @@ class ApiClient {
     };
 
     final response = await http.get(
-      Uri.parse('$baseUrl/api/v1/alerts')
+      Uri.parse('$baseUrl/alerts')
           .replace(queryParameters: queryParams),
       headers: _headers,
     );
@@ -211,7 +211,7 @@ class ApiClient {
 
   Future<void> acknowledgeAlert(String caseId, String alertEventId) async {
     final response = await http.post(
-      Uri.parse('$baseUrl/api/v1/cases/$caseId/alerts/$alertEventId/ack'),
+      Uri.parse('$baseUrl/cases/$caseId/alerts/$alertEventId/ack'),
       headers: _headers,
       body: jsonEncode({}),
     );
@@ -223,7 +223,7 @@ class ApiClient {
 
   Future<void> resolveAlert(String caseId, String alertEventId) async {
     final response = await http.post(
-      Uri.parse('$baseUrl/api/v1/cases/$caseId/alerts/$alertEventId/resolve'),
+      Uri.parse('$baseUrl/cases/$caseId/alerts/$alertEventId/resolve'),
       headers: _headers,
       body: jsonEncode({}),
     );
