@@ -6,6 +6,13 @@
 *.swp
 .buildlog/
 .history
+.DS_Store
+
+# IntelliJ/Android Studio
+.idea/
+*.iml
+*.ipr
+*.iws
 
 
 
