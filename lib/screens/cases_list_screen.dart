@@ -5,6 +5,7 @@ import '../services/cases_provider.dart';
 import '../services/alerts_provider.dart';
 import '../services/auth_provider.dart';
 import '../models/index.dart';
+import '../l10n/app_localizations.dart';
 import 'claim_case_screen.dart';
 
 class CasesListScreen extends StatefulWidget {
@@ -31,6 +32,23 @@ class _CasesListScreenState extends State<CasesListScreen> {
         title: const Text('Active Cases'),
         centerTitle: true,
         actions: [
+          // Language selector
+          PopupMenuButton<AppLanguage>(
+            icon: const Icon(Icons.language),
+            onSelected: (lang) {
+              context.read<LanguageProvider>().setLanguage(lang);
+            },
+            itemBuilder: (context) => [
+              const PopupMenuItem(
+                value: AppLanguage.en,
+                child: Text('🇬🇧 English'),
+              ),
+              const PopupMenuItem(
+                value: AppLanguage.pl,
+                child: Text('🇵🇱 Polski'),
+              ),
+            ],
+          ),
           IconButton(
             icon: const Icon(Icons.notifications),
             onPressed: () {

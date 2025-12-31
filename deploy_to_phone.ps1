@@ -1,13 +1,17 @@
 #!/usr/bin/env pwsh
 # Deploy Flutter midwife app to connected phone with correct backend IP
 
-# Get local IP address (excluding localhost and link-local)
+# Get WiFi IP address
 $ipAddress = (Get-NetIPAddress -AddressFamily IPv4 | 
-    Where-Object { $_.IPAddress -notlike '127.*' -and $_.IPAddress -notlike '169.254.*' } |
+    Where-Object { 
+        $_.IPAddress -notlike '127.*' -and 
+        $_.IPAddress -notlike '169.254.*' -and 
+        $_.InterfaceAlias -like '*Wi-Fi*' 
+    } |
     Select-Object -First 1).IPAddress
 
 if (-not $ipAddress) {
-    Write-Error "Could not determine local IP address"
+    Write-Error "Could not determine Wi-Fi IP address"
     exit 1
 }
 
