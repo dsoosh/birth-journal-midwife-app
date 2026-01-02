@@ -9,6 +9,7 @@ import 'screens/alerts_screen.dart';
 import 'screens/case_detail_screen.dart';
 import 'screens/cases_list_screen.dart';
 import 'screens/login_screen.dart';
+import 'screens/settings_screen.dart';
 import 'services/alerts_provider.dart';
 import 'services/api_client.dart';
 import 'services/auth_provider.dart';
@@ -96,6 +97,7 @@ class _AppState extends State<App> {
                   '/login': (_) => const LoginScreen(),
                   '/cases': (_) => const CasesListScreen(),
                   '/alerts': (_) => const AlertsScreen(),
+                  '/settings': (_) => const SettingsScreen(),
                 },
                 onGenerateRoute: (settings) {
                   if (settings.name == '/case-detail') {

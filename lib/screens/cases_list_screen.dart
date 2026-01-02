@@ -56,6 +56,12 @@ class _CasesListScreenState extends State<CasesListScreen> {
             },
           ),
           IconButton(
+            icon: const Icon(Icons.settings),
+            onPressed: () {
+              Navigator.of(context).pushNamed('/settings');
+            },
+          ),
+          IconButton(
             icon: const Icon(Icons.logout),
             onPressed: () {
               context.read<AuthProvider>().logout().then((_) {
