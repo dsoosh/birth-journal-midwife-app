@@ -54,6 +54,34 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
+  Future<bool> register(String email, String password) async {
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
+
+    try {
+      final response = await apiClient.register(email, password);
+      _token = response.token;
+      _email = email;
+      apiClient.setToken(_token!);
+      await storageService.saveToken(_token!);
+      await storageService.saveEmail(email);
+      _isLoading = false;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      _error = e.toString();
+      _isLoading = false;
+      notifyListeners();
+      return false;
+    }
+  }
+
+  void clearError() {
+    _error = null;
+    notifyListeners();
+  }
+
   Future<void> logout() async {
     _token = null;
     _email = null;

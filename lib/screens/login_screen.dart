@@ -13,6 +13,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
+  bool _isRegistering = false;
 
   @override
   void dispose() {
@@ -37,7 +38,7 @@ class _LoginScreenState extends State<LoginScreen> {
             children: [
               const SizedBox(height: 60),
               Text(
-                'Login',
+                _isRegistering ? 'Create Account' : 'Login',
                 style: Theme.of(context).textTheme.headlineMedium,
               ),
               const SizedBox(height: 40),
@@ -52,6 +53,9 @@ class _LoginScreenState extends State<LoginScreen> {
                 validator: (value) {
                   if (value?.isEmpty ?? true) {
                     return 'Please enter your email';
+                  }
+                  if (!value!.contains('@')) {
+                    return 'Please enter a valid email';
                   }
                   return null;
                 },
@@ -68,6 +72,9 @@ class _LoginScreenState extends State<LoginScreen> {
                 validator: (value) {
                   if (value?.isEmpty ?? true) {
                     return 'Please enter your password';
+                  }
+                  if (_isRegistering && (value?.length ?? 0) < 6) {
+                    return 'Password must be at least 6 characters';
                   }
                   return null;
                 },
@@ -93,10 +100,15 @@ class _LoginScreenState extends State<LoginScreen> {
                               ? null
                               : () async {
                                   if (_formKey.currentState!.validate()) {
-                                    final success = await authProvider.login(
-                                      _emailController.text,
-                                      _passwordController.text,
-                                    );
+                                    final success = _isRegistering
+                                        ? await authProvider.register(
+                                            _emailController.text,
+                                            _passwordController.text,
+                                          )
+                                        : await authProvider.login(
+                                            _emailController.text,
+                                            _passwordController.text,
+                                          );
                                     if (success && mounted) {
                                       Navigator.of(context).pushReplacementNamed('/cases');
                                     }
@@ -110,7 +122,21 @@ class _LoginScreenState extends State<LoginScreen> {
                                     strokeWidth: 2,
                                   ),
                                 )
-                              : const Text('Login'),
+                              : Text(_isRegistering ? 'Create Account' : 'Login'),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      TextButton(
+                        onPressed: () {
+                          setState(() {
+                            _isRegistering = !_isRegistering;
+                            authProvider.clearError();
+                          });
+                        },
+                        child: Text(
+                          _isRegistering
+                              ? 'Already have an account? Login'
+                              : 'Don\'t have an account? Create one',
                         ),
                       ),
                     ],

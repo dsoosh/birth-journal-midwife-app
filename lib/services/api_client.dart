@@ -69,6 +69,27 @@ class ApiClient {
     }
   }
 
+  Future<AuthResponse> register(String email, String password) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/auth/register'),
+      headers: _headers,
+      body: jsonEncode({
+        'email': email,
+        'password': password,
+      }),
+    );
+
+    if (response.statusCode == 200) {
+      return AuthResponse.fromJson(jsonDecode(response.body));
+    } else if (response.statusCode == 409) {
+      throw Exception('Email already exists');
+    } else if (response.statusCode == 400) {
+      throw Exception('Invalid input or password too short');
+    } else {
+      throw Exception('Registration failed: ${response.statusCode}');
+    }
+  }
+
   Future<CasesPage> getCasesWithCursor({
     String status = 'active',
     String view = 'summary',
