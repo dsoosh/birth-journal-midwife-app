@@ -46,91 +46,28 @@ class _SettingsScreenState extends State<SettingsScreen> {
           const Padding(
             padding: EdgeInsets.all(16),
             child: Text(
-              'Local Authentication',
+              'Authentication',
               style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
               ),
             ),
           ),
-          FutureBuilder<bool>(
-            future: _canUseBiometric,
-            builder: (context, snapshot) {
-              if (!snapshot.hasData || !snapshot.data!) {
-                return const Padding(
-                  padding: EdgeInsets.all(16),
-                  child: Text('Biometric authentication not available on this device'),
-                );
-              }
-
-              return ListTile(
-                title: const Text('Biometric Authentication'),
-                subtitle: const Text('Use fingerprint or face recognition'),
-                trailing: Switch(
-                  value: _biometricEnabled,
-                  onChanged: (value) async {
-                    if (value) {
-                      final authenticated = await _biometricService.authenticate();
-                      if (authenticated) {
-                        await _biometricService.enableBiometric();
-                        setState(() => _biometricEnabled = true);
-                        if (mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Biometric authentication enabled'),
-                            ),
-                          );
-                        }
-                      }
-                    } else {
-                      await _biometricService.disableBiometric();
-                      setState(() => _biometricEnabled = false);
-                      if (mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Biometric authentication disabled'),
-                          ),
-                        );
-                      }
-                    }
-                  },
-                ),
-              );
-            },
+          ListTile(
+            title: const Text('Change PIN'),
+            subtitle: Text(_pinEnabled ? 'PIN authentication is active' : 'Set up your PIN'),
+            leading: const Icon(Icons.lock_outline),
+            trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+            onTap: () => _showPINDialog(context),
           ),
           const Divider(),
-          ListTile(
-            title: const Text('PIN Authentication'),
-            subtitle: const Text('Use a PIN code to authenticate'),
-            trailing: Switch(
-              value: _pinEnabled,
-              onChanged: (value) async {
-                if (value) {
-                  _showPINDialog(context);
-                } else {
-                  await _biometricService.disablePIN();
-                  await _biometricService.clearPIN();
-                  setState(() {
-                    _pinEnabled = false;
-                    _pinValue = null;
-                  });
-                  if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('PIN authentication disabled'),
-                      ),
-                    );
-                  }
-                }
-              },
+          const Padding(
+            padding: EdgeInsets.all(16.0),
+            child: Text(
+              'PIN authentication is required for security. You will be asked to enter your PIN whenever the app is reopened or minimized.',
+              style: TextStyle(fontSize: 12, color: Colors.grey),
             ),
           ),
-          if (_pinEnabled)
-            ListTile(
-              title: const Text('Change PIN'),
-              subtitle: const Text('Update your authentication PIN'),
-              onTap: () => _showPINDialog(context),
-            ),
         ],
       ),
     );

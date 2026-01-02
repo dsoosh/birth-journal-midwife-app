@@ -9,6 +9,7 @@ import 'screens/alerts_screen.dart';
 import 'screens/case_detail_screen.dart';
 import 'screens/cases_list_screen.dart';
 import 'screens/login_screen.dart';
+import 'screens/pin_entry_screen.dart';
 import 'screens/settings_screen.dart';
 import 'services/alerts_provider.dart';
 import 'services/api_client.dart';
@@ -39,20 +40,40 @@ class App extends StatefulWidget {
   State<App> createState() => _AppState();
 }
 
-class _AppState extends State<App> {
+class _AppState extends State<App> with WidgetsBindingObserver {
   late final AuthProvider _authProvider;
   late final LanguageProvider _languageProvider;
   late final Future<void> _initFuture;
+  bool _requireAuth = false;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _authProvider = AuthProvider(
       apiClient: widget.apiClient,
       storageService: widget.storageService,
     );
     _languageProvider = LanguageProvider();
     _initFuture = _authProvider.initialize();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive) {
+      // App minimized or lost focus - require auth on resume
+      setState(() => _requireAuth = true);
+    }
+  }
+
+  void _onAuthVerified() {
+    setState(() => _requireAuth = false);
   }
 
   @override
@@ -124,10 +145,19 @@ class _AppState extends State<App> {
 
     return Consumer<AuthProvider>(
       builder: (context, auth, _) {
-        if (auth.isAuthenticated) {
-          return const CasesListScreen();
+        if (!auth.isAuthenticated) {
+          return const LoginScreen();
         }
-        return const LoginScreen();
+        
+        // Require PIN authentication after minimize/resume
+        if (_requireAuth) {
+          return PinEntryScreen(
+            storage: widget.storageService,
+            onPinVerified: _onAuthVerified,
+          );
+        }
+        
+        return const CasesListScreen();
       },
     );
   }
