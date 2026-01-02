@@ -143,6 +143,30 @@ class ApiClient {
     }
   }
 
+  Future<void> setLaborMode(String caseId, bool active) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/cases/$caseId/set-labor'),
+      headers: _headers,
+      body: jsonEncode({'active': active}),
+    );
+
+    if (response.statusCode != 200) {
+      throw Exception('Failed to set labor mode: ${response.statusCode}');
+    }
+  }
+
+  Future<void> setPostpartumMode(String caseId, bool active) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/cases/$caseId/set-postpartum'),
+      headers: _headers,
+      body: jsonEncode({'active': active}),
+    );
+
+    if (response.statusCode != 200) {
+      throw Exception('Failed to set postpartum mode: ${response.statusCode}');
+    }
+  }
+
   Future<List<Event>> getEvents(
     String caseId, {
     int limit = 50,

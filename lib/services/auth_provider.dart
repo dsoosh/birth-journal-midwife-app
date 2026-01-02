@@ -1,7 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'api_client.dart';
 import 'secure_storage_service.dart';
-import '../models/index.dart';
 
 class AuthProvider extends ChangeNotifier {
   final ApiClient apiClient;

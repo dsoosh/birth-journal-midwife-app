@@ -2,6 +2,7 @@
 /// 
 /// Environment-specific backend URLs and settings.
 /// Pass API_BASE_URL via --dart-define for your backend location.
+library;
 
 class Config {
   /// Backend API base URL

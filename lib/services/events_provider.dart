@@ -8,8 +8,8 @@ class EventsProvider extends ChangeNotifier {
   final ApiClient apiClient;
   final NotificationService _notificationService = NotificationService();
 
-  Map<String, List<Event>> _eventsByCase = {};
-  Map<String, WebSocketService?> _wssByCase = {};
+  final Map<String, List<Event>> _eventsByCase = {};
+  final Map<String, WebSocketService?> _wssByCase = {};
   bool _isLoading = false;
   String? _error;
 

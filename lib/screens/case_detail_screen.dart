@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
+import 'package:uuid/uuid.dart';
 import '../services/events_provider.dart';
 import '../services/cases_provider.dart';
 import '../services/auth_provider.dart';
 import '../models/index.dart';
 import '../l10n/app_localizations.dart';
+
+const uuid = Uuid();
 
 class CaseDetailScreen extends StatefulWidget {
   final Case case_;
@@ -176,6 +179,12 @@ class ContractionsAndEventsTab extends StatelessWidget {
                   .toList()
                 ..sort((a, b) => b.ts.compareTo(a.ts)); // Most recent first
 
+          // Group similar events within a time window (5 minutes)
+          final groupedEvents = _groupSimilarEvents(
+            otherEvents,
+            const Duration(minutes: 5),
+          );
+
           return SingleChildScrollView(
             padding: const EdgeInsets.all(16),
             child: Column(
@@ -192,7 +201,7 @@ class ContractionsAndEventsTab extends StatelessWidget {
                   ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 12),
-                if (otherEvents.isEmpty)
+                if (groupedEvents.isEmpty)
                   Padding(
                     padding: const EdgeInsets.all(24),
                     child: Center(
@@ -203,8 +212,8 @@ class ContractionsAndEventsTab extends StatelessWidget {
                     ),
                   )
                 else
-                  ...otherEvents.map(
-                    (event) => _HumanReadableEventCard(event: event),
+                  ...groupedEvents.map(
+                    (group) => _EventGroupCard(events: group),
                   ),
               ],
             ),
@@ -212,6 +221,34 @@ class ContractionsAndEventsTab extends StatelessWidget {
         },
       ),
     );
+  }
+
+  /// Groups similar events within a time window to reduce spam
+  List<List<Event>> _groupSimilarEvents(List<Event> events, Duration window) {
+    if (events.isEmpty) return [];
+
+    final groups = <List<Event>>[];
+    List<Event> currentGroup = [events.first];
+
+    for (int i = 1; i < events.length; i++) {
+      final prev = currentGroup.last;
+      final curr = events[i];
+
+      // Group if same type+kind and within time window
+      final sameType = prev.type == curr.type;
+      final sameKind = prev.payload['kind'] == curr.payload['kind'];
+      final withinWindow = prev.ts.difference(curr.ts).abs() <= window;
+
+      if (sameType && sameKind && withinWindow) {
+        currentGroup.add(curr);
+      } else {
+        groups.add(currentGroup);
+        currentGroup = [curr];
+      }
+    }
+    groups.add(currentGroup);
+
+    return groups;
   }
 }
 
@@ -676,6 +713,231 @@ class _ContractionsGraphPainter extends CustomPainter {
   bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
 }
 
+/// Widget that displays a group of similar events (clumped within time window)
+class _EventGroupCard extends StatelessWidget {
+  final List<Event> events;
+
+  const _EventGroupCard({required this.events});
+
+  @override
+  Widget build(BuildContext context) {
+    if (events.isEmpty) return const SizedBox.shrink();
+
+    // If only one event, show regular card
+    if (events.length == 1) {
+      return _HumanReadableEventCard(event: events.first);
+    }
+
+    // Multiple events - show grouped card
+    final first = events.first;
+    final dateFormatter = DateFormat('MMM d, HH:mm');
+
+    // Get icon and color from first event
+    final icon = _getIconForEvent(first);
+    final color = _getIconColorForEvent(first);
+    final description = _getDescriptionForEvent(first);
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8),
+      color: color.withOpacity(0.05),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Stack(
+              children: [
+                Icon(icon, color: color, size: 24),
+                Positioned(
+                  right: -4,
+                  top: -4,
+                  child: Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: BoxDecoration(
+                      color: color,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Text(
+                      '${events.length}',
+                      style: const TextStyle(
+                        fontSize: 10,
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '$description (${events.length}x)',
+                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    '${dateFormatter.format(events.last.ts)} - ${dateFormatter.format(first.ts)}',
+                    style: Theme.of(
+                      context,
+                    ).textTheme.bodySmall?.copyWith(color: Colors.grey[600]),
+                  ),
+                  if (_getSeverityForEvent(first) != null) ...[
+                    const SizedBox(height: 4),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: _getSeverityColorForEvent(first),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text(
+                        _getSeverityForEvent(first)!.toUpperCase(),
+                        style: const TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  IconData _getIconForEvent(Event event) {
+    if (event.type == 'labor_event') {
+      final kind = event.payload['kind'];
+      switch (kind) {
+        case 'waters_breaking':
+          return Icons.water_drop;
+        case 'bleeding':
+        case 'postpartum_bleeding':
+          return Icons.bloodtype;
+        case 'reduced_fetal_movement':
+          return Icons.child_care;
+        case 'headache_vision':
+          return Icons.visibility_off;
+        case 'fever_chills':
+          return Icons.thermostat;
+        case 'breastfeeding_issues':
+          return Icons.child_care;
+        case 'mood_changes':
+          return Icons.mood_bad;
+        case 'wound_pain':
+          return Icons.healing;
+        case 'leg_pain_swelling':
+          return Icons.directions_walk;
+        case 'urination_issues':
+          return Icons.local_hospital;
+        default:
+          return Icons.warning_amber;
+      }
+    }
+
+    switch (event.type) {
+      case 'postpartum_checkin':
+        return Icons.health_and_safety;
+      case 'note':
+        return Icons.note;
+      default:
+        return Icons.event;
+    }
+  }
+
+  Color _getIconColorForEvent(Event event) {
+    final severity = _getSeverityForEvent(event);
+    if (severity == 'high') return Colors.red;
+    if (severity == 'medium') return Colors.orange;
+    if (event.type.contains('postpartum')) return Colors.teal;
+    if (event.type.contains('labor')) return Colors.purple;
+    return Colors.blue;
+  }
+
+  String? _getSeverityForEvent(Event event) {
+    if (event.type == 'labor_event') {
+      return event.payload['severity'] as String?;
+    }
+    return null;
+  }
+
+  Color _getSeverityColorForEvent(Event event) {
+    switch (_getSeverityForEvent(event)) {
+      case 'high':
+        return Colors.red.shade700;
+      case 'medium':
+        return Colors.orange.shade700;
+      case 'low':
+        return Colors.blue.shade700;
+      default:
+        return Colors.grey;
+    }
+  }
+
+  String _getDescriptionForEvent(Event event) {
+    switch (event.type) {
+      case 'labor_event':
+        final kind = event.payload['kind'] ?? 'unknown';
+        return _formatLaborEventKind(kind);
+      case 'postpartum_checkin':
+        return 'Postpartum check-in';
+      case 'note':
+        return 'Note';
+      default:
+        return event.type.replaceAll('_', ' ');
+    }
+  }
+
+  String _formatLaborEventKind(String kind) {
+    switch (kind) {
+      case 'waters_breaking':
+        return '💧 Waters breaking';
+      case 'bleeding':
+        return '🩸 Bleeding';
+      case 'postpartum_bleeding':
+        return '🩸 Heavy bleeding';
+      case 'mucus_plug':
+        return 'Mucus plug';
+      case 'reduced_fetal_movement':
+        return '👶 Reduced movement';
+      case 'belly_lowering':
+        return 'Belly lowering';
+      case 'nausea':
+        return 'Nausea';
+      case 'urge_to_push':
+        return '⚠️ Urge to push';
+      case 'headache_vision':
+        return '👁️ Headache/vision issues';
+      case 'fever_chills':
+        return '🌡️ Fever/chills';
+      case 'breastfeeding_issues':
+        return '🍼 Breastfeeding issues';
+      case 'mood_changes':
+        return '😢 Mood changes';
+      case 'wound_pain':
+        return '🩹 Wound pain';
+      case 'leg_pain_swelling':
+        return '🦵 Leg pain/swelling';
+      case 'urination_issues':
+        return '🚿 Urination issues';
+      default:
+        return kind.replaceAll('_', ' ');
+    }
+  }
+}
+
 class _HumanReadableEventCard extends StatelessWidget {
   final Event event;
 
@@ -832,62 +1094,99 @@ class _HumanReadableEventCard extends StatelessWidget {
     final description = _getHumanReadableDescription();
     final severity = _getSeverity();
 
+    // Check if this event already has a reaction
+    final eventsProvider = context.watch<EventsProvider>();
+    final allEvents = eventsProvider.getEvents(event.caseId);
+    final hasReaction = allEvents.any((e) =>
+        e.type == 'midwife_reaction' &&
+        e.payload['event_id'] == event.eventId);
+
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
       child: Padding(
         padding: const EdgeInsets.all(12),
-        child: Row(
+        child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(_getIcon(), color: _getIconColor(), size: 24),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    description,
-                    style: Theme.of(context).textTheme.bodyLarge,
-                  ),
-                  const SizedBox(height: 4),
-                  Row(
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(_getIcon(), color: _getIconColor(), size: 24),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        dateFormatter.format(event.ts),
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: Colors.grey[600],
-                        ),
+                        description,
+                        style: Theme.of(context).textTheme.bodyLarge,
                       ),
-                      if (severity != null) ...[
-                        const SizedBox(width: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 6,
-                            vertical: 2,
-                          ),
-                          decoration: BoxDecoration(
-                            color: _getSeverityColor(),
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: Text(
-                            severity.toUpperCase(),
-                            style: const TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          Text(
+                            dateFormatter.format(event.ts),
+                            style: Theme.of(context)
+                                .textTheme
+                                .bodySmall
+                                ?.copyWith(
+                              color: Colors.grey[600],
                             ),
                           ),
-                        ),
-                      ],
+                          if (severity != null) ...[
+                            const SizedBox(width: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                color: _getSeverityColor(),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: Text(
+                                severity.toUpperCase(),
+                                style: const TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
                     ],
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
+            // Add reaction buttons if patient event
+            if (_shouldShowReactions() && !hasReaction) ...[
+              const SizedBox(height: 8),
+              const Divider(),
+              const SizedBox(height: 4),
+              _ReactionButtons(event: event),
+            ],
+            // Show existing reaction
+            if (hasReaction) ...[
+              const SizedBox(height: 8),
+              _ExistingReaction(
+                reaction: allEvents.firstWhere((e) =>
+                    e.type == 'midwife_reaction' &&
+                    e.payload['event_id'] == event.eventId),
+              ),
+            ],
           ],
         ),
       ),
     );
+  }
+
+  bool _shouldShowReactions() {
+    // Only show reactions for patient-reported events
+    return event.source == 'woman' &&
+        (event.type == 'labor_event' || event.type == 'postpartum_checkin');
   }
 }
 
@@ -1059,13 +1358,27 @@ class EventCard extends StatelessWidget {
   }
 }
 
-class DetailsTab extends StatelessWidget {
+class DetailsTab extends StatefulWidget {
   final Case case_;
 
   const DetailsTab({super.key, required this.case_});
 
   @override
+  State<DetailsTab> createState() => _DetailsTabState();
+}
+
+class _DetailsTabState extends State<DetailsTab> {
+  bool _isUpdating = false;
+
+  @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final casesProvider = context.watch<CasesProvider>();
+
+    // Get latest case data from provider
+    final case_ =
+        casesProvider.getCaseById(widget.case_.caseId) ?? widget.case_;
+
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Column(
@@ -1073,30 +1386,67 @@ class DetailsTab extends StatelessWidget {
         children: [
           _buildDetailCard(context, 'Case ID', case_.caseId),
           const SizedBox(height: 12),
-          _buildDetailCard(
-            context,
-            'Status',
-            case_.isClosed
-                ? 'Closed'
-                : '${case_.laborActive ? 'Labor' : ''} ${case_.postpartumActive ? 'Postpartum' : ''}'
-                      .trim(),
+
+          // Mode selector card
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    l10n.caseMode,
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _ModeButton(
+                          label: l10n.laborMode,
+                          icon: Icons.pregnant_woman,
+                          isActive: case_.laborActive,
+                          color: Colors.purple,
+                          isLoading: _isUpdating,
+                          onTap: () => _switchToLabor(case_),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _ModeButton(
+                          label: l10n.postpartumMode,
+                          icon: Icons.child_friendly,
+                          isActive: case_.postpartumActive,
+                          color: Colors.teal,
+                          isLoading: _isUpdating,
+                          onTap: () => _switchToPostpartum(case_),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
           ),
           const SizedBox(height: 12),
+
           _buildDetailCard(
             context,
             'Active Alerts',
             case_.activeAlerts.toString(),
           ),
           const SizedBox(height: 24),
+
+          // Close case button
           if (!case_.isClosed)
             SizedBox(
               width: double.infinity,
               child: ElevatedButton.icon(
-                onPressed: () {
-                  _showCloseConfirmation(context);
-                },
+                onPressed: () => _showCloseConfirmation(context, case_),
                 icon: const Icon(Icons.close),
-                label: const Text('Close Case'),
+                label: Text(l10n.closeCase),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.red,
                   foregroundColor: Colors.white,
@@ -1106,6 +1456,84 @@ class DetailsTab extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  Future<void> _switchToLabor(Case case_) async {
+    if (case_.laborActive) return; // Already in labor mode
+
+    final l10n = AppLocalizations.of(context);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(l10n.switchToLabor),
+        content: Text(l10n.switchToLaborConfirm),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text(l10n.cancel),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.purple),
+            child: Text(l10n.confirm),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true && mounted) {
+      setState(() => _isUpdating = true);
+      final casesProvider = context.read<CasesProvider>();
+
+      // Disable postpartum and enable labor
+      if (case_.postpartumActive) {
+        await casesProvider.setPostpartumMode(case_.caseId, false);
+      }
+      await casesProvider.setLaborMode(case_.caseId, true);
+
+      if (mounted) {
+        setState(() => _isUpdating = false);
+      }
+    }
+  }
+
+  Future<void> _switchToPostpartum(Case case_) async {
+    if (case_.postpartumActive) return; // Already in postpartum mode
+
+    final l10n = AppLocalizations.of(context);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(l10n.switchToPostpartum),
+        content: Text(l10n.switchToPostpartumConfirm),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text(l10n.cancel),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.teal),
+            child: Text(l10n.confirm),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true && mounted) {
+      setState(() => _isUpdating = true);
+      final casesProvider = context.read<CasesProvider>();
+
+      // Disable labor and enable postpartum
+      if (case_.laborActive) {
+        await casesProvider.setLaborMode(case_.caseId, false);
+      }
+      await casesProvider.setPostpartumMode(case_.caseId, true);
+
+      if (mounted) {
+        setState(() => _isUpdating = false);
+      }
+    }
   }
 
   Widget _buildDetailCard(BuildContext context, String label, String value) {
@@ -1136,26 +1564,106 @@ class DetailsTab extends StatelessWidget {
     );
   }
 
-  void _showCloseConfirmation(BuildContext context) {
+  void _showCloseConfirmation(BuildContext context, Case case_) {
+    final l10n = AppLocalizations.of(context);
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Close Case'),
-        content: const Text('Are you sure you want to close this case?'),
+      builder: (ctx) => AlertDialog(
+        title: Text(l10n.closeCase),
+        content: Text(l10n.closeCaseConfirm),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(l10n.cancel),
           ),
-          TextButton(
+          ElevatedButton(
             onPressed: () {
               context.read<CasesProvider>().closeCase(case_.caseId);
-              Navigator.pop(context);
+              Navigator.pop(ctx);
               Navigator.pop(context);
             },
-            child: const Text('Close'),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: Text(l10n.confirm),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _ModeButton extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final bool isActive;
+  final Color color;
+  final bool isLoading;
+  final VoidCallback onTap;
+
+  const _ModeButton({
+    required this.label,
+    required this.icon,
+    required this.isActive,
+    required this.color,
+    required this.isLoading,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: isLoading ? null : onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
+        decoration: BoxDecoration(
+          color: isActive ? color.withOpacity(0.15) : Colors.grey.shade100,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isActive ? color : Colors.grey.shade300,
+            width: isActive ? 2 : 1,
+          ),
+        ),
+        child: Column(
+          children: [
+            if (isLoading)
+              SizedBox(
+                width: 32,
+                height: 32,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  valueColor: AlwaysStoppedAnimation(color),
+                ),
+              )
+            else
+              Icon(icon, size: 32, color: isActive ? color : Colors.grey),
+            const SizedBox(height: 8),
+            Text(
+              label,
+              style: TextStyle(
+                fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
+                color: isActive ? color : Colors.grey.shade700,
+              ),
+            ),
+            if (isActive) ...[
+              const SizedBox(height: 4),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: color,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  'ACTIVE',
+                  style: TextStyle(
+                    fontSize: 10,
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
       ),
     );
   }
@@ -1236,5 +1744,179 @@ class _TimeAxisLabels extends StatelessWidget {
         );
       }).toList(),
     );
+  }
+}
+
+class _ReactionButtons extends StatelessWidget {
+  final Event event;
+
+  const _ReactionButtons({required this.event});
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      spacing: 8,
+      runSpacing: 4,
+      children: [
+        _ReactionChip(
+          label: '✓ Ack',
+          reaction: 'ack',
+          event: event,
+          color: Colors.blue,
+        ),
+        _ReactionChip(
+          label: '🚗 Coming',
+          reaction: 'coming',
+          event: event,
+          color: Colors.orange,
+        ),
+        _ReactionChip(
+          label: '👍 OK',
+          reaction: 'ok',
+          event: event,
+          color: Colors.green,
+        ),
+        _ReactionChip(
+          label: '👁 Seen',
+          reaction: 'seen',
+          event: event,
+          color: Colors.grey,
+        ),
+      ],
+    );
+  }
+}
+
+class _ReactionChip extends StatelessWidget {
+  final String label;
+  final String reaction;
+  final Event event;
+  final Color color;
+
+  const _ReactionChip({
+    required this.label,
+    required this.reaction,
+    required this.event,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: () => _sendReaction(context),
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: color.withOpacity(0.5)),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: color,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _sendReaction(BuildContext context) async {
+    final eventsProvider = context.read<EventsProvider>();
+
+    // Create reaction event
+    final reactionEvent = Event(
+      eventId: uuid.v4(),
+      caseId: event.caseId,
+      type: 'midwife_reaction',
+      ts: DateTime.now().toUtc(),
+      serverTs: DateTime.now().toUtc(),
+      track: 'meta',
+      source: 'midwife',
+      payloadVersion: 1,
+      payload: {
+        'event_id': event.eventId,
+        'reaction': reaction,
+      },
+    );
+
+    // Send via WebSocket
+    eventsProvider.sendMessage(event.caseId, {
+      'type': 'event',
+      'event': reactionEvent.toJson(),
+    });
+  }
+}
+
+class _ExistingReaction extends StatelessWidget {
+  final Event reaction;
+
+  const _ExistingReaction({required this.reaction});
+
+  @override
+  Widget build(BuildContext context) {
+    final reactionType = reaction.payload['reaction'] as String?;
+    final emoji = _getReactionEmoji(reactionType);
+    final label = _getReactionLabel(reactionType);
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.green.shade50,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.green.shade200),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            emoji,
+            style: const TextStyle(fontSize: 16),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            'Midwife: $label',
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: Colors.green.shade900,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _getReactionEmoji(String? reaction) {
+    switch (reaction) {
+      case 'ack':
+        return '✓';
+      case 'coming':
+        return '🚗';
+      case 'ok':
+        return '👍';
+      case 'seen':
+        return '👁';
+      default:
+        return '✓';
+    }
+  }
+
+  String _getReactionLabel(String? reaction) {
+    switch (reaction) {
+      case 'ack':
+        return 'Acknowledged';
+      case 'coming':
+        return "I'm coming";
+      case 'ok':
+        return "It's OK";
+      case 'seen':
+        return 'Seen';
+      default:
+        return 'Acknowledged';
+    }
   }
 }

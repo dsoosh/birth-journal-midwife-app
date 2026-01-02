@@ -27,7 +27,9 @@ class CasesProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final result = await apiClient.getCasesWithCursor(cursor: clearExisting ? null : _nextCursor);
+      final result = await apiClient.getCasesWithCursor(
+        cursor: clearExisting ? null : _nextCursor,
+      );
       final cases = result.cases;
       _nextCursor = result.nextCursor;
 
@@ -70,6 +72,64 @@ class CasesProvider extends ChangeNotifier {
     } catch (e) {
       _error = e.toString();
       notifyListeners();
+    }
+  }
+
+  Future<bool> setLaborMode(String caseId, bool active) async {
+    try {
+      await apiClient.setLaborMode(caseId, active);
+      // Update local case
+      final index = _cases.indexWhere((c) => c.caseId == caseId);
+      if (index != -1) {
+        final c = _cases[index];
+        _cases[index] = Case(
+          caseId: c.caseId,
+          label: c.label,
+          laborActive: active,
+          postpartumActive: active ? false : c.postpartumActive,
+          lastEventTs: DateTime.now(),
+          activeAlerts: c.activeAlerts,
+        );
+      }
+      notifyListeners();
+      return true;
+    } catch (e) {
+      _error = e.toString();
+      notifyListeners();
+      return false;
+    }
+  }
+
+  Future<bool> setPostpartumMode(String caseId, bool active) async {
+    try {
+      await apiClient.setPostpartumMode(caseId, active);
+      // Update local case
+      final index = _cases.indexWhere((c) => c.caseId == caseId);
+      if (index != -1) {
+        final c = _cases[index];
+        _cases[index] = Case(
+          caseId: c.caseId,
+          label: c.label,
+          laborActive: active ? false : c.laborActive,
+          postpartumActive: active,
+          lastEventTs: DateTime.now(),
+          activeAlerts: c.activeAlerts,
+        );
+      }
+      notifyListeners();
+      return true;
+    } catch (e) {
+      _error = e.toString();
+      notifyListeners();
+      return false;
+    }
+  }
+
+  Case? getCaseById(String caseId) {
+    try {
+      return _cases.firstWhere((c) => c.caseId == caseId);
+    } catch (_) {
+      return null;
     }
   }
 }
